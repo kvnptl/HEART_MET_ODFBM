@@ -158,7 +158,7 @@ class convert_image():
         # else:
         #     self.object_detected = False
 
-        detected_objects = []
+        # detected_objects = []
         
         
         # Only publish the target object requested by the referee
@@ -184,6 +184,13 @@ class convert_image():
             #publish message
             self.output_bb_pub.publish(object_detection_msg)
 
+            #draw bounding box on input image
+            opencv_img = cv2.rectangle(opencv_img, (detected_bb_list[object_idx][0], detected_bb_list[object_idx][1]), (detected_bb_list[object_idx][2], detected_bb_list[object_idx][3]), (255,255,255), 2)
+        
+            cv2.imshow('Output Img', opencv_img)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+
         # requested object not detected
         else:
             rospy.loginfo("xxxxx > Object NOT FOUND < xxxxx")
@@ -202,12 +209,13 @@ class convert_image():
             self.output_bb_pub.publish(object_detection_msg)
             
 
-        for i in detected_bb_list:
-            opencv_img = cv2.rectangle(opencv_img, (i[0], i[1]), (i[2], i[3]), (255,255,255), 2)
+        # for i in detected_bb_list:
+        #     opencv_img = cv2.rectangle(opencv_img, (i[0], i[1]), (i[2], i[3]), (255,255,255), 2)
+        
 
-        cv2.imshow('Output Img', opencv_img)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+        # cv2.imshow('Output Img', opencv_img)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
 
         # ready for next image
         # self.stop_sub_flag = False
