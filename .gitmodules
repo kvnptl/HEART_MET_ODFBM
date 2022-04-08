@@ -1,3 +1,0 @@
-[submodule "activity_recognition_ros"]
-	path = activity_recognition_ros
-	url = https://github.com/kvnptl/activity_recognition_ros.git
