@@ -15,14 +15,16 @@
 
 ### How to run the code:
 
-1. Run object detection code:
+1. Run object detection code:  
 `roslaunch object_detection object_detection_benchmark.launch`
 
-2. Publish images from rosbag file (-l means publish continuosly):
+2. Publish images from rosbag file (-l means publish continuosly):  
 `rosbag play -l /home/kvnptl/work/heart_met_competition/bagfiles-001/bagfiles/b-it-bots_2020_11_24_10-17-01.bag`
 
-3. Launch Refbox node:
+3. Launch Refbox node:  
 `roslaunch metrics_refbox metrics_refbox.launch`
 
-4. Launch Ref Client node:
+4. Launch Ref Client node:  
 `roslaunch metrics_refbox_client metrics_refbox_client.launch`
+
+5. Select target object from referee box GUI(checkmark configuration button) and press "Start" to send command to ros node
