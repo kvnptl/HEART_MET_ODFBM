@@ -1,4 +1,17 @@
-# heart-met-metrics-project
+# HEART-MET METRICS project | Object Detection Functional Benchmarking
+
+### System config:
+- Ubuntu 20.04 LTS
+- ROS Noetic
+- Python 3
+
+### Clone dependent repositories/ros packages (put it in src directory):
+
+1. `git clone https://github.com/kvnptl/metrics_refbox.git`
+2. `git clone https://github.com/kvnptl/metrics_refbox_client.git`
+3. `git clone https://github.com/kvnptl/rosbag_recorder.git`
+4. `git clone https://github.com/kvnptl/activity_recognition_ros.git`
+5. `git clone https://github.com/HEART-MET/metrics_refbox_msgs.git`
 
 ### How to run the code:
 
