@@ -25,11 +25,6 @@ class convert_image():
         self.clip_size = 10 #manual number
         self.stop_sub_flag = False
 
-        self.image_sub = rospy.Subscriber(
-            "/hsrb/head_rgbd_sensor/rgb/image_raw", Image, self._input_image_cb)
-        
-        
-
         self.COCO_INSTANCE_CATEGORY_NAMES = [
             '__background__', 'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
             'train', 'truck', 'boat', 'traffic light', 'fire hydrant', 'N/A', 'stop sign',
@@ -46,11 +41,14 @@ class convert_image():
         ]
         
         #publisher
-        self.output_bb_str_pub = rospy.Publisher("prediction_bb_str_output", String, queue_size=10)    
         self.output_bb_pub = rospy.Publisher("/metrics_refbox_client/object_detection_result", ObjectDetectionResult, queue_size=10)
+        
         #subscriber
         self.requested_object = None
         self.referee_command_sub = rospy.Subscriber("/metrics_refbox/command", Command, self._referee_command_cb)
+
+        # waiting for referee box to be ready
+        rospy.loginfo("Waiting for referee box ...")
         
     def _input_image_cb(self, msg):
         """
@@ -91,6 +89,7 @@ class convert_image():
                     while self.requested_object is None:
                         pass
                     
+                    self.image_sub.unregister()
                     output_prediction = self.object_inference()  
             # else:
             #     print("Clip size reached")
@@ -152,15 +151,7 @@ class convert_image():
                 print("{}, {}".format(object_name, score))
 
         print("---------------------------")
-        
-        # if len(detected_object_list) > 0:
-        #     self.object_detected = True
-        # else:
-        #     self.object_detected = False
-
-        # detected_objects = []
-        
-        
+                
         # Only publish the target object requested by the referee
         if (self.requested_object).lower() in detected_object_list:
             rospy.loginfo("--------> Object detected <--------")
@@ -184,12 +175,17 @@ class convert_image():
             #publish message
             self.output_bb_pub.publish(object_detection_msg)
 
-            #draw bounding box on input image
-            opencv_img = cv2.rectangle(opencv_img, (detected_bb_list[object_idx][0], detected_bb_list[object_idx][1]), (detected_bb_list[object_idx][2], detected_bb_list[object_idx][3]), (255,255,255), 2)
-        
-            cv2.imshow('Output Img', opencv_img)
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
+            #draw bounding box on target detected object
+            opencv_img = cv2.rectangle(opencv_img, (int(detected_bb_list[object_idx][0]), 
+                                                    int(detected_bb_list[object_idx][1])), 
+                                                    (int(detected_bb_list[object_idx][2]), 
+                                                    int(detected_bb_list[object_idx][3])), 
+                                                    (255,255,255), 2)
+
+            # display image
+            # cv2.imshow('Output Img', opencv_img)
+            # cv2.waitKey(0)
+            # cv2.destroyAllWindows()
 
         # requested object not detected
         else:
@@ -208,29 +204,46 @@ class convert_image():
             #publish message
             self.output_bb_pub.publish(object_detection_msg)
             
-
+        # draw bounding box on all detected objects (with score >0.5)
         # for i in detected_bb_list:
         #     opencv_img = cv2.rectangle(opencv_img, (i[0], i[1]), (i[2], i[3]), (255,255,255), 2)
         
-
+        # display image
         # cv2.imshow('Output Img', opencv_img)
         # cv2.waitKey(0)
         # cv2.destroyAllWindows()
 
         # ready for next image
-        # self.stop_sub_flag = False
+        self.stop_sub_flag = False
 
         return predictions
 
     def _referee_command_cb(self, msg):
-        # task: 1
-        # command: 1
-        # task_config: "{\"Target object\": \"Cup\"}"
-        # uid: "0888bd42-a3dc-4495-9247-69a804a64bee"
-        # if self.object_detected:
+        
+        # Referee comaand message (example)
+        '''
+        task: 1
+        command: 1
+        task_config: "{\"Target object\": \"Cup\"}"
+        uid: "0888bd42-a3dc-4495-9247-69a804a64bee"
+        '''
+
+        # START command from referee
         if msg.task == 1 and msg.command == 1:
+            # start subscriber for image topic
+            self.image_sub = rospy.Subscriber("/hsrb/head_rgbd_sensor/rgb/image_raw", 
+                                                Image, 
+                                                self._input_image_cb)
+
+            #extract target object from task_config            
             self.requested_object = msg.task_config.split(":")[1].split("\"")[1]
-            # print("#########Requested object: ", requested_object)
+            print("Requested object: ", self.requested_object)
+        
+        # STOP command from referee
+        if msg.command == 2:
+            self.stop_sub_flag = True
+            self.image_sub.unregister()
+            print("Subscriber stopped")
                 
 
 if __name__ == "__main__":
