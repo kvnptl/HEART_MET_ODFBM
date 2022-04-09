@@ -10,9 +10,8 @@
 1. `git clone https://github.com/kvnptl/metrics_refbox.git`
 2. `git clone https://github.com/kvnptl/metrics_refbox_client.git`
 3. `git clone https://github.com/kvnptl/rosbag_recorder.git`
-4. `git clone https://github.com/kvnptl/activity_recognition_ros.git`
-5. `git clone https://github.com/HEART-MET/metrics_refbox_msgs.git`
-6. `sudo apt install ros-noetic-rospy-message-converter`
+4. `git clone https://github.com/HEART-MET/metrics_refbox_msgs.git`
+5. `sudo apt install ros-noetic-rospy-message-converter`
 
 ### How to run the code:
 
