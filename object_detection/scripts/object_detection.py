@@ -4,7 +4,7 @@
 from tokenize import String
 from urllib import request
 
-from sympy import re
+from sympy import capture, re
 import rospy # Python library for ROS
 from sensor_msgs.msg import Image # Image is the message type
 from std_msgs.msg import String # String is the message type
@@ -12,19 +12,24 @@ from cv_bridge import CvBridge, CvBridgeError # Package to convert between ROS a
 import cv2 # OpenCV library
 from sensor_msgs.msg import Image
 from metrics_refbox_msgs.msg import ObjectDetectionResult, Command
+import rospkg
+import os
+from datetime import datetime
 
 #import pytorch
 import torch
 import torchvision
 
-class convert_image():
+class object_detection():
     def __init__(self) -> None:
-        rospy.loginfo("ROS image msg to OpenCV image converter node is ready...")
+        rospy.loginfo("Object Detection node is ready...")
         self.cv_bridge = CvBridge()
         self.image_queue = None
-        self.clip_size = 10 #manual number
+        self.clip_size = 5 #manual number
         self.stop_sub_flag = False
+        self.cnt = 0
 
+        # COCO dataset labels
         self.COCO_INSTANCE_CATEGORY_NAMES = [
             '__background__', 'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
             'train', 'truck', 'boat', 'traffic light', 'fire hydrant', 'N/A', 'stop sign',
@@ -58,7 +63,8 @@ class convert_image():
         """
         try:
             if not self.stop_sub_flag:
-                rospy.loginfo("Image received..")
+                
+                # convert ros image to opencv image
                 cv_image = self.cv_bridge.imgmsg_to_cv2(msg, "bgr8")
                 if self.image_queue is None:
                     self.image_queue = []
@@ -69,15 +75,41 @@ class convert_image():
                 if len(self.image_queue) > self.clip_size:
                     #Clip size reached
                     # print("Clip size reached...")
+                    rospy.loginfo("Image received..")
                     
                     self.stop_sub_flag = True
+
+                    # pop the first element
                     self.image_queue.pop(0)
 
                     # save all images on local drive
-                    cnt = 0
+
+                    # create folder for incoming images
+                    # get an instance of RosPack with the default search paths
+                    rospack = rospkg.RosPack()
+
+                    # get the file path for object_detection package
+                    pkg_path = rospack.get_path('object_detection')
+                    captured_images_path = pkg_path + "/captured_images/"
+                    
+                    if not os.path.exists(captured_images_path):
+                        # 'makedirs' creates a directory with it's path, if applicable.
+                        os.makedirs(captured_images_path)
+
+                    # get date and time                    
+                    # datetime object containing current date and time
+                    now = datetime.now()
+
+                    # dd/mm/YY H:M:S
+                    dt_string = now.strftime("%d_%m_%Y_%H_%M_%S")
+
                     for i in self.image_queue:
-                        cv2.imwrite('/home/kvnptl/work/heart_met_competition/heart_met_ws/src/object_detection/temp_images/temp_images_' + str(cnt) + '.jpg',i)
-                        cnt+=1
+                        # save image path
+                        img_path = captured_images_path + 'captured_images_' + dt_string + '_' + str(self.cnt) + '.jpg'
+                        
+                        # save image to local drive
+                        cv2.imwrite(img_path, i)
+                        self.cnt+=1
 
                     rospy.loginfo("Input images saved on local drive")
 
@@ -85,14 +117,16 @@ class convert_image():
                     # print("Image queue size: ", len(self.image_queue))
 
                     # waiting for referee box to be ready
-                    rospy.loginfo("Waiting for referee box to be ready...")
-                    while self.requested_object is None:
-                        pass
+                    # rospy.loginfo("Waiting for referee box to be ready...")
+                    # while self.requested_object is None:
+                    #     pass
                     
+                    # deregister subscriber
                     self.image_sub.unregister()
+
+                    # call object inference method
                     output_prediction = self.object_inference()  
-            # else:
-            #     print("Clip size reached")
+
                     
         except CvBridgeError as e:
             rospy.logerr("Could not convert ros sensor msgs Image to opencv Image.")
@@ -215,6 +249,7 @@ class convert_image():
 
         # ready for next image
         self.stop_sub_flag = False
+        self.image_queue = []
 
         return predictions
 
@@ -230,6 +265,9 @@ class convert_image():
 
         # START command from referee
         if msg.task == 1 and msg.command == 1:
+
+            print("\nStart command received")
+
             # start subscriber for image topic
             self.image_sub = rospy.Subscriber("/hsrb/head_rgbd_sensor/rgb/image_raw", 
                                                 Image, 
@@ -237,17 +275,19 @@ class convert_image():
 
             #extract target object from task_config            
             self.requested_object = msg.task_config.split(":")[1].split("\"")[1]
+            print("\n")
             print("Requested object: ", self.requested_object)
+            print("\n")
         
         # STOP command from referee
         if msg.command == 2:
             self.stop_sub_flag = True
             self.image_sub.unregister()
-            print("Subscriber stopped")
+            rospy.loginfo("Subscriber stopped")
                 
 
 if __name__ == "__main__":
-    rospy.init_node("convert_rosImg_to_cvImg")
-    object_img = convert_image()
+    rospy.init_node("object_detection_node")
+    object_detection_obj = object_detection()
     
     rospy.spin()
