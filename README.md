@@ -12,6 +12,7 @@
 3. `git clone https://github.com/kvnptl/rosbag_recorder.git`
 4. `git clone https://github.com/HEART-MET/metrics_refbox_msgs.git`
 5. `sudo apt install ros-noetic-rospy-message-converter`
+6. `sudo apt install sympy`
 
 ### How to run the code:
 
