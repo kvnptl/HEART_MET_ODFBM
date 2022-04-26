@@ -16,6 +16,10 @@ import rospkg
 import os
 from datetime import datetime
 
+import controller_manager_msgs.srv
+import rospy
+import trajectory_msgs.msg
+
 #import pytorch
 import torch
 import torchvision
@@ -25,10 +29,11 @@ class object_detection():
         rospy.loginfo("Object Detection node is ready...")
         self.cv_bridge = CvBridge()
         self.image_queue = None
-        self.clip_size = 5 #manual number
+        self.clip_size = 2 #manual number
         self.stop_sub_flag = False
         self.cnt = 0
 
+        # TODO: update dataset classes as per METRICS competition
         # COCO dataset labels
         self.COCO_INSTANCE_CATEGORY_NAMES = [
             '__background__', 'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
@@ -47,13 +52,23 @@ class object_detection():
         
         #publisher
         self.output_bb_pub = rospy.Publisher("/metrics_refbox_client/object_detection_result", ObjectDetectionResult, queue_size=10)
+
+        # HSR pan motion publisher
+        self.hsr_pan_pub = rospy.Publisher(
+            '/hsrb/head_trajectory_controller/command',
+            trajectory_msgs.msg.JointTrajectory, queue_size=10)
+        self.move_right_flag = False
+        self.move_left_flag = True
+
+        # set of the HSR camera to get front straight view
+        self.move_front_flag = False
+        self._hsr_head_controller('front')
         
+
         #subscriber
         self.requested_object = None
         self.referee_command_sub = rospy.Subscriber("/metrics_refbox/command", Command, self._referee_command_cb)
 
-        # waiting for referee box to be ready
-        rospy.loginfo("Waiting for referee box ...")
         
     def _input_image_cb(self, msg):
         """
@@ -82,36 +97,36 @@ class object_detection():
                     # pop the first element
                     self.image_queue.pop(0)
 
-                    # save all images on local drive
+                    # # save all images on local drive
 
-                    # create folder for incoming images
-                    # get an instance of RosPack with the default search paths
-                    rospack = rospkg.RosPack()
+                    # # create folder for incoming images
+                    # # get an instance of RosPack with the default search paths
+                    # rospack = rospkg.RosPack()
 
-                    # get the file path for object_detection package
-                    pkg_path = rospack.get_path('object_detection')
-                    captured_images_path = pkg_path + "/captured_images/"
+                    # # get the file path for object_detection package
+                    # pkg_path = rospack.get_path('object_detection')
+                    # captured_images_path = pkg_path + "/captured_images/"
                     
-                    if not os.path.exists(captured_images_path):
-                        # 'makedirs' creates a directory with it's path, if applicable.
-                        os.makedirs(captured_images_path)
+                    # if not os.path.exists(captured_images_path):
+                    #     # 'makedirs' creates a directory with it's path, if applicable.
+                    #     os.makedirs(captured_images_path)
 
-                    # get date and time                    
-                    # datetime object containing current date and time
-                    now = datetime.now()
+                    # # get date and time                    
+                    # # datetime object containing current date and time
+                    # now = datetime.now()
 
-                    # dd/mm/YY H:M:S
-                    dt_string = now.strftime("%d_%m_%Y_%H_%M_%S")
+                    # # dd/mm/YY H:M:S
+                    # dt_string = now.strftime("%d_%m_%Y_%H_%M_%S")
 
-                    for i in self.image_queue:
-                        # save image path
-                        img_path = captured_images_path + 'captured_images_' + dt_string + '_' + str(self.cnt) + '.jpg'
+                    # for i in self.image_queue:
+                    #     # save image path
+                    #     img_path = captured_images_path + 'captured_images_' + dt_string + '_' + str(self.cnt) + '.jpg'
                         
-                        # save image to local drive
-                        cv2.imwrite(img_path, i)
-                        self.cnt+=1
+                    #     # save image to local drive
+                    #     cv2.imwrite(img_path, i)
+                    #     self.cnt+=1
 
-                    rospy.loginfo("Input images saved on local drive")
+                    # rospy.loginfo("Input images saved on local drive")
 
                     # call object inference method
                     # print("Image queue size: ", len(self.image_queue))
@@ -148,7 +163,9 @@ class object_detection():
 
         # print(clip.shape)
 
-        model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True)
+        # model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True)
+        model = torchvision.models.detection.ssd300_vgg16(pretrained=True)
+
 
         clip = ((clip / 255.) * 2) - 1.
 
@@ -210,33 +227,87 @@ class object_detection():
             self.output_bb_pub.publish(object_detection_msg)
 
             #draw bounding box on target detected object
-            opencv_img = cv2.rectangle(opencv_img, (int(detected_bb_list[object_idx][0]), 
-                                                    int(detected_bb_list[object_idx][1])), 
-                                                    (int(detected_bb_list[object_idx][2]), 
-                                                    int(detected_bb_list[object_idx][3])), 
-                                                    (255,255,255), 2)
+            # opencv_img = cv2.rectangle(opencv_img, (int(detected_bb_list[object_idx][0]), 
+            #                                         int(detected_bb_list[object_idx][1])), 
+            #                                         (int(detected_bb_list[object_idx][2]), 
+            #                                         int(detected_bb_list[object_idx][3])), 
+            #                                         (255,255,255), 2)
 
             # display image
             # cv2.imshow('Output Img', opencv_img)
             # cv2.waitKey(0)
             # cv2.destroyAllWindows()
 
+            # ready for next image
+            self.stop_sub_flag = False
+            self.image_queue = []
+
+            # initialize HSR motion flags
+            self.move_right_flag = False
+            self.move_left_flag = True
+
+            # go back to center
+            if not self.move_front_flag:
+                self._hsr_head_controller('front')
+
         # requested object not detected
         else:
             rospy.loginfo("xxxxx > Object NOT FOUND < xxxxx")
 
-            # Referee output message publishing
-            object_detection_msg = ObjectDetectionResult()
-            object_detection_msg.message_type = ObjectDetectionResult.RESULT
-            object_detection_msg.result_type = ObjectDetectionResult.BOUNDING_BOX_2D
-            object_detection_msg.object_found = False
+            # TODO: check left and right images for object
 
-            #convert OpenCV image to ROS image message
-            ros_image = self.cv_bridge.cv2_to_imgmsg(self.image_queue[0], encoding="passthrough")
-            object_detection_msg.image = ros_image
+            # move head in right direction
+            if not self.move_right_flag:
+                self.move_right_flag = True
+                self.move_left_flag = False
+                
+                # ready for next image
+                self.stop_sub_flag = False
+                self.image_queue = []
 
-            #publish message
-            self.output_bb_pub.publish(object_detection_msg)
+                # move head to right
+                # rospy.loginfo("Moving head to right...")
+                self._hsr_head_controller('right')
+            
+            # move head in left direction
+            elif not self.move_left_flag:
+                self.move_right_flag = True
+                self.move_left_flag = True
+
+                # ready for next image
+                self.stop_sub_flag = False
+                self.image_queue = []
+
+                # move head to left
+                # rospy.loginfo("Moving head to left...")
+                self._hsr_head_controller('left')
+            
+            elif self.move_left_flag and self.move_right_flag:
+                
+                rospy.loginfo("xxxxx > Object NOT FOUND < xxxxx")
+                
+                # Referee output message publishing
+                object_detection_msg = ObjectDetectionResult()
+                object_detection_msg.message_type = ObjectDetectionResult.RESULT
+                object_detection_msg.result_type = ObjectDetectionResult.BOUNDING_BOX_2D
+                object_detection_msg.object_found = False
+
+                #convert OpenCV image to ROS image message
+                ros_image = self.cv_bridge.cv2_to_imgmsg(self.image_queue[0], encoding="passthrough")
+                object_detection_msg.image = ros_image
+
+                #publish message
+                self.output_bb_pub.publish(object_detection_msg)
+
+                # ready for next image
+                self.stop_sub_flag = False
+                self.image_queue = []
+                self.move_right_flag = False
+                self.move_left_flag = True
+
+                # go back to center
+                self._hsr_head_controller('front')
+            
             
         # draw bounding box on all detected objects (with score >0.5)
         # for i in detected_bb_list:
@@ -246,10 +317,6 @@ class object_detection():
         # cv2.imshow('Output Img', opencv_img)
         # cv2.waitKey(0)
         # cv2.destroyAllWindows()
-
-        # ready for next image
-        self.stop_sub_flag = False
-        self.image_queue = []
 
         return predictions
 
@@ -268,6 +335,10 @@ class object_detection():
 
             print("\nStart command received")
 
+            # set of the HSR camera to get front straight view
+            if not self.move_front_flag:
+                self._hsr_head_controller('front')
+
             # start subscriber for image topic
             self.image_sub = rospy.Subscriber("/hsrb/head_rgbd_sensor/rgb/image_raw", 
                                                 Image, 
@@ -284,7 +355,116 @@ class object_detection():
             self.stop_sub_flag = True
             self.image_sub.unregister()
             rospy.loginfo("Subscriber stopped")
-                
+    
+
+    def _hsr_head_controller(self, head_direction):
+        '''
+        This function is used to control the head of the robot.
+        '''
+        # wait to establish connection between the controller
+        while self.hsr_pan_pub.get_num_connections() == 0:
+            rospy.sleep(0.1)
+
+        # make sure the controller is running
+        rospy.wait_for_service('/hsrb/controller_manager/list_controllers')
+        list_controllers = rospy.ServiceProxy(
+            '/hsrb/controller_manager/list_controllers',
+            controller_manager_msgs.srv.ListControllers)
+        running = False
+        while running is False:
+            rospy.sleep(0.1)
+            for c in list_controllers().controller:
+                if c.name == 'head_trajectory_controller' and c.state == 'running':
+                    running = True
+        
+        # set the target position of the head
+        traj = trajectory_msgs.msg.JointTrajectory()
+        traj.joint_names = ["head_pan_joint", "head_tilt_joint"]
+        p = trajectory_msgs.msg.JointTrajectoryPoint()
+
+        
+        # pan motion range: -3.839 to 1.745 (rad) | -220 to 100 (deg)
+        # tilt motion range: -1.570 to 0.523 (rad) | -90 to 30 (deg)
+        # +Ve pos value means anti-clockwise rotation 
+        # motion (pan, tilt)
+        # total field of view is -60 to 60 cm = 120cm (in x-axis)
+
+        if head_direction == 'front':
+
+            rospy.loginfo("Moving head to right...")
+            
+            # move head to right
+            p.positions = [0.0, -0.3]
+            p.velocities = [0.0, 0.0]
+            p.time_from_start = rospy.Duration(2)
+            traj.points = [p]
+            self.hsr_pan_pub.publish(traj)
+            
+            # wait for the head to finish moving
+            rospy.sleep(3)
+
+            if not self.move_front_flag:
+                self.move_front_flag = True
+
+            ###########################################
+            # TODO: check/read current angle of the head
+            ###########################################
+
+            # waiting for referee box to be ready
+            rospy.loginfo("Waiting for referee box ...")
+
+
+            # start subscriber for image topic
+            # self.image_sub = rospy.Subscriber("/hsrb/head_rgbd_sensor/rgb/image_raw", 
+            #                                     Image, 
+            #                                     self._input_image_cb)
+
+
+        elif head_direction == 'right':
+
+            rospy.loginfo("Moving head to right...")
+            
+            # move head to right
+            p.positions = [-0.2, -0.3]
+            p.velocities = [0.0, 0.0]
+            p.time_from_start = rospy.Duration(1)
+            traj.points = [p]
+            self.hsr_pan_pub.publish(traj)
+            
+            # wait for the head to finish moving
+            rospy.sleep(2)
+
+            self.move_front_flag = False
+
+            # start subscriber for image topic
+            self.image_sub = rospy.Subscriber("/hsrb/head_rgbd_sensor/rgb/image_raw", 
+                                                Image, 
+                                                self._input_image_cb)
+        
+        elif head_direction == 'left':
+
+            rospy.loginfo("Moving head to left...")
+            
+            # move head to left
+            p.positions = [0.2, -0.3]
+            p.velocities = [0.0, 0.0]
+            p.time_from_start = rospy.Duration(1)
+            traj.points = [p]
+            self.hsr_pan_pub.publish(traj)
+
+            # wait for the head to finish moving
+            rospy.sleep(2)
+
+            self.move_front_flag = False
+
+            # start subscriber for image topic
+            self.image_sub = rospy.Subscriber("/hsrb/head_rgbd_sensor/rgb/image_raw", 
+                                                Image, 
+                                                self._input_image_cb)
+        
+        
+
+        
 
 if __name__ == "__main__":
     rospy.init_node("object_detection_node")

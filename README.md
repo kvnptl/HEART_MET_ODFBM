@@ -26,3 +26,8 @@
 `roslaunch metrics_refbox metrics_refbox.launch`
 
 4. Select target object from referee box GUI(checkmark configuration button) and press "Start" to send command to ros node
+
+### Debug:  
+
+View the image by running: 
+`rosrun image_view image_view image:=/hsrb/head_rgbd_sensor/rgb/image_raw`

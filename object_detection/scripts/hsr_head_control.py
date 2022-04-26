@@ -31,7 +31,22 @@ while running is False:
 traj = trajectory_msgs.msg.JointTrajectory()
 traj.joint_names = ["head_pan_joint", "head_tilt_joint"]
 p = trajectory_msgs.msg.JointTrajectoryPoint()
-p.positions = [0.2, 0.2]
+
+# +Ve value means anti-clockwise rotation 
+# motion (pan, tilt)
+# total field of view is -60 to 60 cm = 120cm
+
+# front
+p.positions = [0.0, -0.3]
+
+# right 
+# p.positions = [-0.3, -0.3]
+
+# left
+# p.positions = [0.3, -0.3]
+
+
+
 p.velocities = [0, 0]
 p.time_from_start = rospy.Duration(3)
 traj.points = [p]
