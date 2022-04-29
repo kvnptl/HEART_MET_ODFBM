@@ -52,7 +52,7 @@ class object_detection():
         
         #subscriber
         self.requested_object = None
-        self.referee_command_sub = rospy.Subscriber("/metrics_refbox/command", Command, self._referee_command_cb)
+        self.referee_command_sub = rospy.Subscriber("/metrics_refbox_client/command", Command, self._referee_command_cb)
 
         # waiting for referee box to be ready
         rospy.loginfo("Waiting for referee box ...")
@@ -145,8 +145,8 @@ class object_detection():
         print(">>>> Input image shape: ", opencv_img.shape)
 
 
-        predictions = run(weights="/home/lucy/heart_met_ws/src/HEART_MET_ODFBM/object_detection/scripts/best.pt", 
-        data="/home/lucy/heart_met_ws/src/HEART_MET_ODFBM/object_detection/scripts/heartmet.yaml", 
+        predictions = run(weights="/home/kvnptl/work/heart_met_competition/heart_met_ws/src/HEART_MET_ODFBM/object_detection/scripts/best.pt", 
+        data="/home/kvnptl/work/heart_met_competition/heart_met_ws/src/HEART_MET_ODFBM/object_detection/scripts/heartmet.yaml", 
         source=opencv_img)
 
         # # opencv image dimension in Height x Width x Channel

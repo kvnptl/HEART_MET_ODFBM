@@ -70,7 +70,7 @@ class object_detection():
 
         #subscriber
         self.requested_object = None
-        self.referee_command_sub = rospy.Subscriber("/metrics_refbox/command", Command, self._referee_command_cb)
+        self.referee_command_sub = rospy.Subscriber("/metrics_refbox_client/command", Command, self._referee_command_cb)
 
         
     def _input_image_cb(self, msg):
@@ -260,10 +260,6 @@ class object_detection():
             object_detection_msg.image = ros_image
 
             #publish message
-
-            if self.move_left_flag == True and self.move_right_flag == False:
-                rospy.loginfo(".........Waiting for 2.5 sec............")
-                rospy.sleep(2.8)
             
             rospy.loginfo("Publishing result to referee...")
             
