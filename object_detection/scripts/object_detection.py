@@ -24,6 +24,9 @@ import trajectory_msgs.msg
 import torch
 import torchvision
 
+# importing Yolov5 model
+from detect_modified import run
+
 class object_detection():
     def __init__(self) -> None:
         rospy.loginfo("Object Detection node is ready...")
@@ -91,6 +94,8 @@ class object_detection():
                     #Clip size reached
                     # print("Clip size reached...")
                     rospy.loginfo("Image received..")
+
+                    
                     
                     self.stop_sub_flag = True
 
@@ -155,33 +160,57 @@ class object_detection():
         
         opencv_img = self.image_queue[0]
 
-        # opencv image dimension in Height x Width x Channel
-        clip = torch.from_numpy(opencv_img)
+        #####################
+        # Load YOLOv5 model for inferencing
+        #####################
 
-        #convert to torch image dimension Channel x Height x Width
-        clip = clip.permute(2, 0, 1)
+        # Give the incoming image for inferencing
+        predictions = run(weights="/home/lucy/heart_met_ws/src/HEART_MET_ODFBM/object_detection/scripts/best.pt", 
+        data="/home/lucy/heart_met_ws/src/HEART_MET_ODFBM/object_detection/scripts/heartmet.yaml", 
+        source=opencv_img)
 
-        # print(clip.shape)
+        ######################
+        # OLD fasterrcnn model
+        ######################
+
+        # # opencv image dimension in Height x Width x Channel
+        # clip = torch.from_numpy(opencv_img)
+
+        # #convert to torch image dimension Channel x Height x Width
+        # clip = clip.permute(2, 0, 1)
+
+        # # print(clip.shape)
 
         # model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True)
-        model = torchvision.models.detection.ssd300_vgg16(pretrained=True)
+
+        # # Making the code device-agnostic
+        # device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+        # # Transferring the model to a CUDA enabled GPU
+        # model = model.to(device)
 
 
-        clip = ((clip / 255.) * 2) - 1.
+        # clip = ((clip / 255.) * 2) - 1.
 
-        # For inference
-        model.eval()
-        x = [clip]
-        predictions = model(x)
+        # # For inference
+        # model.eval()
+        # x = [clip]
+        # predictions = model(x)
 
         # print("---------------------------")
         # print("Fast RCNN output: \n",predictions)
         # print("---------------------------")
 
         #print prediction boxes on input image
-        output_bb_ary = predictions[0]['boxes'].detach().numpy()
-        output_labels_ary = predictions[0]['labels'].detach().numpy()
-        output_scores_ary = predictions[0]['scores'].detach().numpy()
+        # output_bb_ary = predictions[0]['boxes'].detach().numpy()
+        # output_labels_ary = predictions[0]['labels'].detach().numpy()
+        # output_scores_ary = predictions[0]['scores'].detach().numpy()
+        
+        # extracting bounding boxes, labels, and scores from prediction output
+
+        output_bb_ary = predictions['boxes']
+        output_labels_ary = predictions['labels']
+        output_scores_ary = predictions['scores']
 
         detected_object_list = []
         detected_object_score = []
@@ -191,7 +220,7 @@ class object_detection():
         print("---------------------------")
         print("Name of the objects, Score\n")
         for idx, value in enumerate(output_labels_ary):
-            object_name = self.COCO_INSTANCE_CATEGORY_NAMES[value]
+            object_name = value
             score = output_scores_ary[idx]
 
             if score > 0.5:
@@ -205,9 +234,16 @@ class object_detection():
                 
         # Only publish the target object requested by the referee
         if (self.requested_object).lower() in detected_object_list:
+
             rospy.loginfo("--------> Object detected <--------")
+            
             requested_object_string = (self.requested_object).lower()
             object_idx = detected_object_list.index(requested_object_string)
+
+            print("---------------------------")
+            print("Bounding Box: ", detected_bb_list)
+            print("---------------------------")
+
 
             # Referee output message publishing
             object_detection_msg = ObjectDetectionResult()
@@ -224,6 +260,13 @@ class object_detection():
             object_detection_msg.image = ros_image
 
             #publish message
+
+            if self.move_left_flag == True and self.move_right_flag == False:
+                rospy.loginfo(".........Waiting for 2.5 sec............")
+                rospy.sleep(2.8)
+            
+            rospy.loginfo("Publishing result to referee...")
+            
             self.output_bb_pub.publish(object_detection_msg)
 
             #draw bounding box on target detected object
@@ -352,8 +395,10 @@ class object_detection():
         
         # STOP command from referee
         if msg.command == 2:
-            self.stop_sub_flag = True
+            
             self.image_sub.unregister()
+            self.stop_sub_flag = False
+            rospy.loginfo("Received stopped command from referee")
             rospy.loginfo("Subscriber stopped")
     
 
@@ -391,10 +436,10 @@ class object_detection():
 
         if head_direction == 'front':
 
-            rospy.loginfo("Moving head to right...")
+            rospy.loginfo("Moving head to get front view...")
             
             # move head to right
-            p.positions = [0.0, -0.3]
+            p.positions = [0.0, -0.5]
             p.velocities = [0.0, 0.0]
             p.time_from_start = rospy.Duration(2)
             traj.points = [p]
@@ -425,7 +470,7 @@ class object_detection():
             rospy.loginfo("Moving head to right...")
             
             # move head to right
-            p.positions = [-0.2, -0.3]
+            p.positions = [-0.2, -0.5]
             p.velocities = [0.0, 0.0]
             p.time_from_start = rospy.Duration(1)
             traj.points = [p]
@@ -446,7 +491,7 @@ class object_detection():
             rospy.loginfo("Moving head to left...")
             
             # move head to left
-            p.positions = [0.2, -0.3]
+            p.positions = [0.2, -0.5]
             p.velocities = [0.0, 0.0]
             p.time_from_start = rospy.Duration(1)
             traj.points = [p]

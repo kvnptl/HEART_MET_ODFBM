@@ -2,7 +2,7 @@
 <launch>
 
     <!-- launching object detection benchmark node -->
-    <node pkg="object_detection" type="object_detection_without_HSR.py" name="object_detection_node" output="screen">
+    <node pkg="object_detection" type="object_detection.py" name="object_detection_node" output="screen">
     </node>
 
     <!-- launching metrics refbox client node -->

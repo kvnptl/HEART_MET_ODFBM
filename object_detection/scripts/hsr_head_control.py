@@ -37,13 +37,13 @@ p = trajectory_msgs.msg.JointTrajectoryPoint()
 # total field of view is -60 to 60 cm = 120cm
 
 # front
-p.positions = [0.0, -0.3]
+p.positions = [0.0, -0.5]
 
 # right 
-# p.positions = [-0.3, -0.3]
+# p.positions = [-0.2, -0.4]
 
 # left
-# p.positions = [0.3, -0.3]
+# p.positions = [0.2, -0.4]
 
 
 

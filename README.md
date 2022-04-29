@@ -29,5 +29,12 @@
 
 ### Debug:  
 
-View the image by running: 
+View the rosbag image by running: 
 `rosrun image_view image_view image:=/hsrb/head_rgbd_sensor/rgb/image_raw`
+
+
+#### Data collection
+
+- Distance between table edge and robot central axis is ~90cm.
+- Camera position - ~142cm
+- Table height ~112cm

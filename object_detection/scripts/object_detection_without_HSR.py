@@ -20,6 +20,8 @@ from datetime import datetime
 import torch
 import torchvision
 
+from detect_modified import run
+
 class object_detection():
     def __init__(self) -> None:
         rospy.loginfo("Object Detection node is ready...")
@@ -142,41 +144,72 @@ class object_detection():
 
         print(">>>> Input image shape: ", opencv_img.shape)
 
-        # opencv image dimension in Height x Width x Channel
-        clip = torch.from_numpy(opencv_img)
 
-        #convert to torch image dimension Channel x Height x Width
-        clip = clip.permute(2, 0, 1)
+        predictions = run(weights="/home/lucy/heart_met_ws/src/HEART_MET_ODFBM/object_detection/scripts/best.pt", 
+        data="/home/lucy/heart_met_ws/src/HEART_MET_ODFBM/object_detection/scripts/heartmet.yaml", 
+        source=opencv_img)
 
-        # print(clip.shape)
+        # # opencv image dimension in Height x Width x Channel
+        # clip = torch.from_numpy(opencv_img)
 
-        model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True)
+        # #convert to torch image dimension Channel x Height x Width
+        # clip = clip.permute(2, 0, 1)
 
-        clip = ((clip / 255.) * 2) - 1.
+        # # print(clip.shape)
 
-        # For inference
-        model.eval()
-        x = [clip]
-        predictions = model(x)
+        # model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True)
+
+        # # Making the code device-agnostic
+        # device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+        # # Transferring the model to a CUDA enabled GPU
+        # model = model.to(device)
+
+
+        # clip = ((clip / 255.) * 2) - 1.
+
+        # # For inference
+        # model.eval()
+        # x = [clip]
+        # predictions = model(x)
 
         # print("---------------------------")
         # print("Fast RCNN output: \n",predictions)
         # print("---------------------------")
 
         #print prediction boxes on input image
-        output_bb_ary = predictions[0]['boxes'].detach().numpy()
-        output_labels_ary = predictions[0]['labels'].detach().numpy()
-        output_scores_ary = predictions[0]['scores'].detach().numpy()
+        # output_bb_ary = predictions[0]['boxes'].detach().numpy()
+        # output_labels_ary = predictions[0]['labels'].detach().numpy()
+        # output_scores_ary = predictions[0]['scores'].detach().numpy()
+
+        output_bb_ary = predictions['boxes']
+        output_labels_ary = predictions['labels']
+        output_scores_ary = predictions['scores']
+
 
         detected_object_list = []
         detected_object_score = []
         detected_bb_list = []
 
         # Extract required objects from prediction output
+        # print("---------------------------")
+        # print("Name of the objects, Score\n")
+        # for idx, value in enumerate(output_labels_ary):
+        #     object_name = self.COCO_INSTANCE_CATEGORY_NAMES[value]
+        #     score = output_scores_ary[idx]
+
+        #     if score > 0.5:
+        #         detected_object_list.append(object_name)
+        #         detected_object_score.append(score)
+        #         detected_bb_list.append(output_bb_ary[idx])
+
+        #         print("{}, {}".format(object_name, score))
+
+        # Extract required objects from prediction output
         print("---------------------------")
         print("Name of the objects, Score\n")
         for idx, value in enumerate(output_labels_ary):
-            object_name = self.COCO_INSTANCE_CATEGORY_NAMES[value]
+            object_name = value
             score = output_scores_ary[idx]
 
             if score > 0.5:
@@ -291,5 +324,7 @@ class object_detection():
 if __name__ == "__main__":
     rospy.init_node("object_detection_node")
     object_detection_obj = object_detection()
+
+    
     
     rospy.spin()
