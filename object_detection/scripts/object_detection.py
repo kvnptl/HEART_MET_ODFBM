@@ -5,11 +5,12 @@ from tokenize import String
 from urllib import request
 
 from sympy import capture, re
-import rospy # Python library for ROS
-from sensor_msgs.msg import Image # Image is the message type
-from std_msgs.msg import String # String is the message type
-from cv_bridge import CvBridge, CvBridgeError # Package to convert between ROS and OpenCV Images
-import cv2 # OpenCV library
+import rospy  # Python library for ROS
+from sensor_msgs.msg import Image  # Image is the message type
+from std_msgs.msg import String  # String is the message type
+# Package to convert between ROS and OpenCV Images
+from cv_bridge import CvBridge, CvBridgeError
+import cv2  # OpenCV library
 from sensor_msgs.msg import Image
 from metrics_refbox_msgs.msg import ObjectDetectionResult, Command
 import rospkg
@@ -27,12 +28,13 @@ import torchvision
 # importing Yolov5 model
 from detect_modified import run
 
+
 class object_detection():
     def __init__(self) -> None:
         rospy.loginfo("Object Detection node is ready...")
         self.cv_bridge = CvBridge()
         self.image_queue = None
-        self.clip_size = 2 #manual number
+        self.clip_size = 2  # manual number
         self.stop_sub_flag = False
         self.cnt = 0
 
@@ -52,9 +54,10 @@ class object_detection():
             'microwave', 'oven', 'toaster', 'sink', 'refrigerator', 'N/A', 'book',
             'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush'
         ]
-        
-        #publisher
-        self.output_bb_pub = rospy.Publisher("/metrics_refbox_client/object_detection_result", ObjectDetectionResult, queue_size=10)
+
+        # publisher
+        self.output_bb_pub = rospy.Publisher(
+            "/metrics_refbox_client/object_detection_result", ObjectDetectionResult, queue_size=10)
 
         # HSR pan motion publisher
         self.hsr_pan_pub = rospy.Publisher(
@@ -66,13 +69,12 @@ class object_detection():
         # set of the HSR camera to get front straight view
         self.move_front_flag = False
         self._hsr_head_controller('front')
-        
 
-        #subscriber
+        # subscriber
         self.requested_object = None
-        self.referee_command_sub = rospy.Subscriber("/metrics_refbox_client/command", Command, self._referee_command_cb)
+        self.referee_command_sub = rospy.Subscriber(
+            "/metrics_refbox_client/command", Command, self._referee_command_cb)
 
-        
     def _input_image_cb(self, msg):
         """
         :msg: sensor_msgs.Image
@@ -81,22 +83,20 @@ class object_detection():
         """
         try:
             if not self.stop_sub_flag:
-                
+
                 # convert ros image to opencv image
                 cv_image = self.cv_bridge.imgmsg_to_cv2(msg, "bgr8")
                 if self.image_queue is None:
                     self.image_queue = []
-                
+
                 self.image_queue.append(cv_image)
                 # print("Counter: ", len(self.image_queue))
 
                 if len(self.image_queue) > self.clip_size:
-                    #Clip size reached
+                    # Clip size reached
                     # print("Clip size reached...")
                     rospy.loginfo("Image received..")
 
-                    
-                    
                     self.stop_sub_flag = True
 
                     # pop the first element
@@ -111,12 +111,12 @@ class object_detection():
                     # # get the file path for object_detection package
                     # pkg_path = rospack.get_path('object_detection')
                     # captured_images_path = pkg_path + "/captured_images/"
-                    
+
                     # if not os.path.exists(captured_images_path):
                     #     # 'makedirs' creates a directory with it's path, if applicable.
                     #     os.makedirs(captured_images_path)
 
-                    # # get date and time                    
+                    # # get date and time
                     # # datetime object containing current date and time
                     # now = datetime.now()
 
@@ -126,7 +126,7 @@ class object_detection():
                     # for i in self.image_queue:
                     #     # save image path
                     #     img_path = captured_images_path + 'captured_images_' + dt_string + '_' + str(self.cnt) + '.jpg'
-                        
+
                     #     # save image to local drive
                     #     cv2.imwrite(img_path, i)
                     #     self.cnt+=1
@@ -140,24 +140,24 @@ class object_detection():
                     # rospy.loginfo("Waiting for referee box to be ready...")
                     # while self.requested_object is None:
                     #     pass
-                    
+
                     # deregister subscriber
                     self.image_sub.unregister()
 
                     # call object inference method
-                    output_prediction = self.object_inference()  
+                    output_prediction = self.object_inference()
 
-                    
         except CvBridgeError as e:
-            rospy.logerr("Could not convert ros sensor msgs Image to opencv Image.")
+            rospy.logerr(
+                "Could not convert ros sensor msgs Image to opencv Image.")
             rospy.logerr(str(e))
             self._check_failure()
             return
-    
+
     def object_inference(self):
 
         rospy.loginfo("Object Inferencing Started...")
-        
+
         opencv_img = self.image_queue[0]
 
         #####################
@@ -165,9 +165,9 @@ class object_detection():
         #####################
 
         # Give the incoming image for inferencing
-        predictions = run(weights="/home/lucy/heart_met_ws/src/HEART_MET_ODFBM/object_detection/scripts/best.pt", 
-        data="/home/lucy/heart_met_ws/src/HEART_MET_ODFBM/object_detection/scripts/heartmet.yaml", 
-        source=opencv_img)
+        predictions = run(weights="/home/lucy/heart_met_ws/src/HEART_MET_ODFBM/object_detection/scripts/best.pt",
+                          data="/home/lucy/heart_met_ws/src/HEART_MET_ODFBM/object_detection/scripts/heartmet.yaml",
+                          source=opencv_img)
 
         ######################
         # OLD fasterrcnn model
@@ -189,7 +189,6 @@ class object_detection():
         # # Transferring the model to a CUDA enabled GPU
         # model = model.to(device)
 
-
         # clip = ((clip / 255.) * 2) - 1.
 
         # # For inference
@@ -201,11 +200,11 @@ class object_detection():
         # print("Fast RCNN output: \n",predictions)
         # print("---------------------------")
 
-        #print prediction boxes on input image
+        # print prediction boxes on input image
         # output_bb_ary = predictions[0]['boxes'].detach().numpy()
         # output_labels_ary = predictions[0]['labels'].detach().numpy()
         # output_scores_ary = predictions[0]['scores'].detach().numpy()
-        
+
         # extracting bounding boxes, labels, and scores from prediction output
 
         output_bb_ary = predictions['boxes']
@@ -231,12 +230,12 @@ class object_detection():
                 print("{}, {}".format(object_name, score))
 
         print("---------------------------")
-                
+
         # Only publish the target object requested by the referee
         if (self.requested_object).lower() in detected_object_list:
 
             rospy.loginfo("--------> Object detected <--------")
-            
+
             requested_object_string = (self.requested_object).lower()
             object_idx = detected_object_list.index(requested_object_string)
 
@@ -244,32 +243,36 @@ class object_detection():
             print("Bounding Box: ", detected_bb_list)
             print("---------------------------")
 
-
             # Referee output message publishing
             object_detection_msg = ObjectDetectionResult()
             object_detection_msg.message_type = ObjectDetectionResult.RESULT
             object_detection_msg.result_type = ObjectDetectionResult.BOUNDING_BOX_2D
             object_detection_msg.object_found = True
-            object_detection_msg.box2d.min_x = int(detected_bb_list[object_idx][0])
-            object_detection_msg.box2d.min_y = int(detected_bb_list[object_idx][1])
-            object_detection_msg.box2d.max_x = int(detected_bb_list[object_idx][2])
-            object_detection_msg.box2d.max_y = int(detected_bb_list[object_idx][3])
+            object_detection_msg.box2d.min_x = int(
+                detected_bb_list[object_idx][0])
+            object_detection_msg.box2d.min_y = int(
+                detected_bb_list[object_idx][1])
+            object_detection_msg.box2d.max_x = int(
+                detected_bb_list[object_idx][2])
+            object_detection_msg.box2d.max_y = int(
+                detected_bb_list[object_idx][3])
 
-            #convert OpenCV image to ROS image message
-            ros_image = self.cv_bridge.cv2_to_imgmsg(self.image_queue[0], encoding="passthrough")
+            # convert OpenCV image to ROS image message
+            ros_image = self.cv_bridge.cv2_to_imgmsg(
+                self.image_queue[0], encoding="passthrough")
             object_detection_msg.image = ros_image
 
-            #publish message
-            
+            # publish message
+
             rospy.loginfo("Publishing result to referee...")
-            
+
             self.output_bb_pub.publish(object_detection_msg)
 
-            #draw bounding box on target detected object
-            # opencv_img = cv2.rectangle(opencv_img, (int(detected_bb_list[object_idx][0]), 
-            #                                         int(detected_bb_list[object_idx][1])), 
-            #                                         (int(detected_bb_list[object_idx][2]), 
-            #                                         int(detected_bb_list[object_idx][3])), 
+            # draw bounding box on target detected object
+            # opencv_img = cv2.rectangle(opencv_img, (int(detected_bb_list[object_idx][0]),
+            #                                         int(detected_bb_list[object_idx][1])),
+            #                                         (int(detected_bb_list[object_idx][2]),
+            #                                         int(detected_bb_list[object_idx][3])),
             #                                         (255,255,255), 2)
 
             # display image
@@ -299,7 +302,7 @@ class object_detection():
             if not self.move_right_flag:
                 self.move_right_flag = True
                 self.move_left_flag = False
-                
+
                 # ready for next image
                 self.stop_sub_flag = False
                 self.image_queue = []
@@ -307,7 +310,7 @@ class object_detection():
                 # move head to right
                 # rospy.loginfo("Moving head to right...")
                 self._hsr_head_controller('right')
-            
+
             # move head in left direction
             elif not self.move_left_flag:
                 self.move_right_flag = True
@@ -320,22 +323,23 @@ class object_detection():
                 # move head to left
                 # rospy.loginfo("Moving head to left...")
                 self._hsr_head_controller('left')
-            
+
             elif self.move_left_flag and self.move_right_flag:
-                
+
                 rospy.loginfo("xxxxx > Object NOT FOUND < xxxxx")
-                
+
                 # Referee output message publishing
                 object_detection_msg = ObjectDetectionResult()
                 object_detection_msg.message_type = ObjectDetectionResult.RESULT
                 object_detection_msg.result_type = ObjectDetectionResult.BOUNDING_BOX_2D
                 object_detection_msg.object_found = False
 
-                #convert OpenCV image to ROS image message
-                ros_image = self.cv_bridge.cv2_to_imgmsg(self.image_queue[0], encoding="passthrough")
+                # convert OpenCV image to ROS image message
+                ros_image = self.cv_bridge.cv2_to_imgmsg(
+                    self.image_queue[0], encoding="passthrough")
                 object_detection_msg.image = ros_image
 
-                #publish message
+                # publish message
                 self.output_bb_pub.publish(object_detection_msg)
 
                 # ready for next image
@@ -346,12 +350,11 @@ class object_detection():
 
                 # go back to center
                 self._hsr_head_controller('front')
-            
-            
+
         # draw bounding box on all detected objects (with score >0.5)
         # for i in detected_bb_list:
         #     opencv_img = cv2.rectangle(opencv_img, (i[0], i[1]), (i[2], i[3]), (255,255,255), 2)
-        
+
         # display image
         # cv2.imshow('Output Img', opencv_img)
         # cv2.waitKey(0)
@@ -360,7 +363,7 @@ class object_detection():
         return predictions
 
     def _referee_command_cb(self, msg):
-        
+
         # Referee comaand message (example)
         '''
         task: 1
@@ -379,24 +382,24 @@ class object_detection():
                 self._hsr_head_controller('front')
 
             # start subscriber for image topic
-            self.image_sub = rospy.Subscriber("/hsrb/head_rgbd_sensor/rgb/image_raw", 
-                                                Image, 
-                                                self._input_image_cb)
+            self.image_sub = rospy.Subscriber("/hsrb/head_rgbd_sensor/rgb/image_raw",
+                                              Image,
+                                              self._input_image_cb)
 
-            #extract target object from task_config            
-            self.requested_object = msg.task_config.split(":")[1].split("\"")[1]
+            # extract target object from task_config
+            self.requested_object = msg.task_config.split(":")[
+                1].split("\"")[1]
             print("\n")
             print("Requested object: ", self.requested_object)
             print("\n")
-        
+
         # STOP command from referee
         if msg.command == 2:
-            
+
             self.image_sub.unregister()
             self.stop_sub_flag = False
             rospy.loginfo("Received stopped command from referee")
             rospy.loginfo("Subscriber stopped")
-    
 
     def _hsr_head_controller(self, head_direction):
         '''
@@ -417,30 +420,29 @@ class object_detection():
             for c in list_controllers().controller:
                 if c.name == 'head_trajectory_controller' and c.state == 'running':
                     running = True
-        
+
         # set the target position of the head
         traj = trajectory_msgs.msg.JointTrajectory()
         traj.joint_names = ["head_pan_joint", "head_tilt_joint"]
         p = trajectory_msgs.msg.JointTrajectoryPoint()
 
-        
         # pan motion range: -3.839 to 1.745 (rad) | -220 to 100 (deg)
         # tilt motion range: -1.570 to 0.523 (rad) | -90 to 30 (deg)
-        # +Ve pos value means anti-clockwise rotation 
+        # +Ve pos value means anti-clockwise rotation
         # motion (pan, tilt)
         # total field of view is -60 to 60 cm = 120cm (in x-axis)
 
         if head_direction == 'front':
 
             rospy.loginfo("Moving head to get front view...")
-            
+
             # move head to right
             p.positions = [0.0, -0.5]
             p.velocities = [0.0, 0.0]
             p.time_from_start = rospy.Duration(2)
             traj.points = [p]
             self.hsr_pan_pub.publish(traj)
-            
+
             # wait for the head to finish moving
             rospy.sleep(3)
 
@@ -454,38 +456,36 @@ class object_detection():
             # waiting for referee box to be ready
             rospy.loginfo("Waiting for referee box ...")
 
-
             # start subscriber for image topic
-            # self.image_sub = rospy.Subscriber("/hsrb/head_rgbd_sensor/rgb/image_raw", 
-            #                                     Image, 
+            # self.image_sub = rospy.Subscriber("/hsrb/head_rgbd_sensor/rgb/image_raw",
+            #                                     Image,
             #                                     self._input_image_cb)
-
 
         elif head_direction == 'right':
 
             rospy.loginfo("Moving head to right...")
-            
+
             # move head to right
             p.positions = [-0.2, -0.5]
             p.velocities = [0.0, 0.0]
             p.time_from_start = rospy.Duration(1)
             traj.points = [p]
             self.hsr_pan_pub.publish(traj)
-            
+
             # wait for the head to finish moving
             rospy.sleep(2)
 
             self.move_front_flag = False
 
             # start subscriber for image topic
-            self.image_sub = rospy.Subscriber("/hsrb/head_rgbd_sensor/rgb/image_raw", 
-                                                Image, 
-                                                self._input_image_cb)
-        
+            self.image_sub = rospy.Subscriber("/hsrb/head_rgbd_sensor/rgb/image_raw",
+                                              Image,
+                                              self._input_image_cb)
+
         elif head_direction == 'left':
 
             rospy.loginfo("Moving head to left...")
-            
+
             # move head to left
             p.positions = [0.2, -0.5]
             p.velocities = [0.0, 0.0]
@@ -499,16 +499,13 @@ class object_detection():
             self.move_front_flag = False
 
             # start subscriber for image topic
-            self.image_sub = rospy.Subscriber("/hsrb/head_rgbd_sensor/rgb/image_raw", 
-                                                Image, 
-                                                self._input_image_cb)
-        
-        
+            self.image_sub = rospy.Subscriber("/hsrb/head_rgbd_sensor/rgb/image_raw",
+                                              Image,
+                                              self._input_image_cb)
 
-        
 
 if __name__ == "__main__":
     rospy.init_node("object_detection_node")
     object_detection_obj = object_detection()
-    
+
     rospy.spin()
