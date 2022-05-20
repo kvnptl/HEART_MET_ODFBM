@@ -163,10 +163,15 @@ class object_detection():
         #####################
         # Load YOLOv5 model for inferencing
         #####################
+        # get an instance of RosPack with the default search paths
+        rospack = rospkg.RosPack()
 
+        # get the file path for object_detection package
+        pkg_path = rospack.get_path('object_detection')
+        model_path = pkg_path + "/scripts/"
         # Give the incoming image for inferencing
-        predictions = run(weights="/home/lucy/heart_met_ws/src/HEART_MET_ODFBM/object_detection/scripts/best.pt",
-                          data="/home/lucy/heart_met_ws/src/HEART_MET_ODFBM/object_detection/scripts/heartmet.yaml",
+        predictions = run(weights= model_path + "best.pt",
+                          data= model_path + "heartmet.yaml",
                           source=opencv_img)
 
         ######################
