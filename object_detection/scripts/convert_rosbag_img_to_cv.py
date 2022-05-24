@@ -17,6 +17,7 @@ import rosbag
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 
+
 def main():
     """Extract a folder of images from a rosbag.
     """
@@ -30,13 +31,14 @@ def main():
     # print ("Extract images from %s on topic %s into %s" % (args.bag_file,
     #                                                       args.image_topic, args.output_dir))
 
-    # input output paths
-    input_bagfiles_dir = "../captured_images"
+    # input output paths"
+    input_bagfiles_dir = "../captured_images/day_2_object_detection"
     input_rostopic = "/hsrb/head_rgbd_sensor/rgb/image_raw"
-    output_dir = "../captured_images/extracted_images/"
+    output_dir = input_bagfiles_dir
 
     # get files from given dir
-    onlyfiles = [f for f in listdir(input_bagfiles_dir) if isfile(join(input_bagfiles_dir, f))]
+    onlyfiles = [f for f in listdir(input_bagfiles_dir) if isfile(
+        join(input_bagfiles_dir, f))]
 
     # loop over all files
     for bag_file in range(len(onlyfiles)):
@@ -46,10 +48,9 @@ def main():
         bag = rosbag.Bag(file_path, "r")
         bridge = CvBridge()
         count = 0
-        
 
         for topic, msg, t in bag.read_messages(topics=[input_rostopic]):
-            
+
             # count = 0 means only storing 1st image
             if count == 0:
 
@@ -57,14 +58,16 @@ def main():
                 cv_img = bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
 
                 # save images
-                cv2.imwrite(os.path.join(output_dir, "frame%06i.png" % bag_file), cv_img)
-                print ("Wrote image %i" % bag_file)
+                cv2.imwrite(os.path.join(
+                    output_dir, "frame%06i.png" % bag_file), cv_img)
+                print("Wrote image %i" % bag_file)
 
             count += 1
 
         bag.close()
 
     return
+
 
 if __name__ == '__main__':
     main()
