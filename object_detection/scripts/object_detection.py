@@ -24,7 +24,6 @@ import trajectory_msgs.msg
 #import pytorch
 import torch
 import torchvision
-
 # importing Yolov5 model
 from detect_modified import run
 
@@ -54,6 +53,9 @@ class object_detection():
             'microwave', 'oven', 'toaster', 'sink', 'refrigerator', 'N/A', 'book',
             'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush'
         ]
+
+        # yolo model confidence threshold
+        self.confidence_threshold = 0.5
 
         # publisher
         self.output_bb_pub = rospy.Publisher(
@@ -102,34 +104,35 @@ class object_detection():
                     # pop the first element
                     self.image_queue.pop(0)
 
-                    # # save all images on local drive
+                    # save all images on local drive
 
-                    # # create folder for incoming images
-                    # # get an instance of RosPack with the default search paths
+                    # create folder for incoming images
+                    # get an instance of RosPack with the default search paths
                     # rospack = rospkg.RosPack()
 
-                    # # get the file path for object_detection package
+                    # get the file path for object_detection package
                     # pkg_path = rospack.get_path('object_detection')
                     # captured_images_path = pkg_path + "/captured_images/"
 
                     # if not os.path.exists(captured_images_path):
-                    #     # 'makedirs' creates a directory with it's path, if applicable.
-                    #     os.makedirs(captured_images_path)
+                    # 'makedirs' creates a directory with it's path, if applicable.
+                    # os.makedirs(captured_images_path)
 
-                    # # get date and time
-                    # # datetime object containing current date and time
+                    # get date and time
+                    # datetime object containing current date and time
                     # now = datetime.now()
 
-                    # # dd/mm/YY H:M:S
+                    # dd/mm/YY H:M:S
                     # dt_string = now.strftime("%d_%m_%Y_%H_%M_%S")
 
                     # for i in self.image_queue:
-                    #     # save image path
-                    #     img_path = captured_images_path + 'captured_images_' + dt_string + '_' + str(self.cnt) + '.jpg'
+                    # save image path
+                    # img_path = captured_images_path + 'captured_images_' + \
+                    # dt_string + '_' + str(self.cnt) + '.jpg'
 
-                    #     # save image to local drive
-                    #     cv2.imwrite(img_path, i)
-                    #     self.cnt+=1
+                    # save image to local drive
+                    # cv2.imwrite(img_path, i)
+                    # self.cnt += 1
 
                     # rospy.loginfo("Input images saved on local drive")
 
@@ -168,50 +171,14 @@ class object_detection():
 
         # get the file path for object_detection package
         pkg_path = rospack.get_path('object_detection')
-        model_path = pkg_path + "/scripts/"
+        model_path = pkg_path + "/models/"
+        data_config_path = pkg_path + "/scripts/"
         # Give the incoming image for inferencing
-        predictions = run(weights= model_path + "best.pt",
-                          data= model_path + "heartmet.yaml",
+        predictions = run(weights=model_path + "best.pt",
+                          data=data_config_path + "heartmet.yaml",
                           source=opencv_img)
 
-        ######################
-        # OLD fasterrcnn model
-        ######################
-
-        # # opencv image dimension in Height x Width x Channel
-        # clip = torch.from_numpy(opencv_img)
-
-        # #convert to torch image dimension Channel x Height x Width
-        # clip = clip.permute(2, 0, 1)
-
-        # # print(clip.shape)
-
-        # model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True)
-
-        # # Making the code device-agnostic
-        # device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
-        # # Transferring the model to a CUDA enabled GPU
-        # model = model.to(device)
-
-        # clip = ((clip / 255.) * 2) - 1.
-
-        # # For inference
-        # model.eval()
-        # x = [clip]
-        # predictions = model(x)
-
-        # print("---------------------------")
-        # print("Fast RCNN output: \n",predictions)
-        # print("---------------------------")
-
-        # print prediction boxes on input image
-        # output_bb_ary = predictions[0]['boxes'].detach().numpy()
-        # output_labels_ary = predictions[0]['labels'].detach().numpy()
-        # output_scores_ary = predictions[0]['scores'].detach().numpy()
-
         # extracting bounding boxes, labels, and scores from prediction output
-
         output_bb_ary = predictions['boxes']
         output_labels_ary = predictions['labels']
         output_scores_ary = predictions['scores']
@@ -227,7 +194,7 @@ class object_detection():
             object_name = value
             score = output_scores_ary[idx]
 
-            if score > 0.5:
+            if score > self.confidence_threshold:
                 detected_object_list.append(object_name)
                 detected_object_score.append(score)
                 detected_bb_list.append(output_bb_ary[idx])
@@ -238,16 +205,12 @@ class object_detection():
 
         # Only publish the target object requested by the referee
         if (self.requested_object).lower() in detected_object_list:
-
             rospy.loginfo("--------> Object detected <--------")
-
             requested_object_string = (self.requested_object).lower()
             object_idx = detected_object_list.index(requested_object_string)
-
             print("---------------------------")
             print("Bounding Box: ", detected_bb_list)
             print("---------------------------")
-
             # Referee output message publishing
             object_detection_msg = ObjectDetectionResult()
             object_detection_msg.message_type = ObjectDetectionResult.RESULT
@@ -268,17 +231,15 @@ class object_detection():
             object_detection_msg.image = ros_image
 
             # publish message
-
             rospy.loginfo("Publishing result to referee...")
-
             self.output_bb_pub.publish(object_detection_msg)
 
             # draw bounding box on target detected object
             # opencv_img = cv2.rectangle(opencv_img, (int(detected_bb_list[object_idx][0]),
             #                                         int(detected_bb_list[object_idx][1])),
-            #                                         (int(detected_bb_list[object_idx][2]),
-            #                                         int(detected_bb_list[object_idx][3])),
-            #                                         (255,255,255), 2)
+            #                            (int(detected_bb_list[object_idx][2]),
+            #                             int(detected_bb_list[object_idx][3])),
+            #                            (255, 255, 255), 2)
 
             # display image
             # cv2.imshow('Output Img', opencv_img)

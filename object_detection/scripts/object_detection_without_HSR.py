@@ -20,7 +20,7 @@ from datetime import datetime
 #import pytorch
 import torch
 import torchvision
-
+# importing Yolov5 model
 from detect_modified import run
 
 
@@ -29,7 +29,7 @@ class object_detection():
         rospy.loginfo("Object Detection node is ready...")
         self.cv_bridge = CvBridge()
         self.image_queue = None
-        self.clip_size = 5  # manual number
+        self.clip_size = 2  # manual number
         self.stop_sub_flag = False
         self.cnt = 0
 
@@ -48,6 +48,9 @@ class object_detection():
             'microwave', 'oven', 'toaster', 'sink', 'refrigerator', 'N/A', 'book',
             'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush'
         ]
+
+        # yolo model confidence threshold
+        self.confidence_threshold = 0.5
 
         # publisher
         self.output_bb_pub = rospy.Publisher(
@@ -92,33 +95,33 @@ class object_detection():
 
                     # create folder for incoming images
                     # get an instance of RosPack with the default search paths
-                    rospack = rospkg.RosPack()
+                    # rospack = rospkg.RosPack()
 
                     # get the file path for object_detection package
-                    pkg_path = rospack.get_path('object_detection')
-                    captured_images_path = pkg_path + "/captured_images/"
+                    # pkg_path = rospack.get_path('object_detection')
+                    # captured_images_path = pkg_path + "/captured_images/"
 
-                    if not os.path.exists(captured_images_path):
-                        # 'makedirs' creates a directory with it's path, if applicable.
-                        os.makedirs(captured_images_path)
+                    # if not os.path.exists(captured_images_path):
+                    # 'makedirs' creates a directory with it's path, if applicable.
+                    # os.makedirs(captured_images_path)
 
                     # get date and time
                     # datetime object containing current date and time
-                    now = datetime.now()
+                    # now = datetime.now()
 
                     # dd/mm/YY H:M:S
-                    dt_string = now.strftime("%d_%m_%Y_%H_%M_%S")
+                    # dt_string = now.strftime("%d_%m_%Y_%H_%M_%S")
 
-                    for i in self.image_queue:
-                        # save image path
-                        img_path = captured_images_path + 'captured_images_' + \
-                            dt_string + '_' + str(self.cnt) + '.jpg'
+                    # for i in self.image_queue:
+                    # save image path
+                    # img_path = captured_images_path + 'captured_images_' + \
+                    # dt_string + '_' + str(self.cnt) + '.jpg'
 
-                        # save image to local drive
-                        cv2.imwrite(img_path, i)
-                        self.cnt += 1
+                    # save image to local drive
+                    # cv2.imwrite(img_path, i)
+                    # self.cnt += 1
 
-                    rospy.loginfo("Input images saved on local drive")
+                    # rospy.loginfo("Input images saved on local drive")
 
                     # call object inference method
                     # print("Image queue size: ", len(self.image_queue))
@@ -147,44 +150,22 @@ class object_detection():
 
         opencv_img = self.image_queue[0]
 
-        print(">>>> Input image shape: ", opencv_img.shape)
+        #####################
+        # Load YOLOv5 model for inferencing
+        #####################
+        # get an instance of RosPack with the default search paths
+        rospack = rospkg.RosPack()
 
-        predictions = run(weights="/home/kvnptl/work/heart_met_competition/heart_met_ws/src/HEART_MET_ODFBM/object_detection/scripts/best.pt",
-                          data="/home/kvnptl/work/heart_met_competition/heart_met_ws/src/HEART_MET_ODFBM/object_detection/scripts/heartmet.yaml",
+        # get the file path for object_detection package
+        pkg_path = rospack.get_path('object_detection')
+        model_path = pkg_path + "/models/"
+        data_config_path = pkg_path + "/scripts/"
+        # Give the incoming image for inferencing
+        predictions = run(weights=model_path + "best.pt",
+                          data=data_config_path + "heartmet.yaml",
                           source=opencv_img)
 
-        # # opencv image dimension in Height x Width x Channel
-        # clip = torch.from_numpy(opencv_img)
-
-        # #convert to torch image dimension Channel x Height x Width
-        # clip = clip.permute(2, 0, 1)
-
-        # # print(clip.shape)
-
-        # model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True)
-
-        # # Making the code device-agnostic
-        # device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
-        # # Transferring the model to a CUDA enabled GPU
-        # model = model.to(device)
-
-        # clip = ((clip / 255.) * 2) - 1.
-
-        # # For inference
-        # model.eval()
-        # x = [clip]
-        # predictions = model(x)
-
-        # print("---------------------------")
-        # print("Fast RCNN output: \n",predictions)
-        # print("---------------------------")
-
-        # print prediction boxes on input image
-        # output_bb_ary = predictions[0]['boxes'].detach().numpy()
-        # output_labels_ary = predictions[0]['labels'].detach().numpy()
-        # output_scores_ary = predictions[0]['scores'].detach().numpy()
-
+        # extracting bounding boxes, labels, and scores from prediction output
         output_bb_ary = predictions['boxes']
         output_labels_ary = predictions['labels']
         output_scores_ary = predictions['scores']
@@ -194,27 +175,13 @@ class object_detection():
         detected_bb_list = []
 
         # Extract required objects from prediction output
-        # print("---------------------------")
-        # print("Name of the objects, Score\n")
-        # for idx, value in enumerate(output_labels_ary):
-        #     object_name = self.COCO_INSTANCE_CATEGORY_NAMES[value]
-        #     score = output_scores_ary[idx]
-
-        #     if score > 0.5:
-        #         detected_object_list.append(object_name)
-        #         detected_object_score.append(score)
-        #         detected_bb_list.append(output_bb_ary[idx])
-
-        #         print("{}, {}".format(object_name, score))
-
-        # Extract required objects from prediction output
         print("---------------------------")
         print("Name of the objects, Score\n")
         for idx, value in enumerate(output_labels_ary):
             object_name = value
             score = output_scores_ary[idx]
 
-            if score > 0.5:
+            if score > self.confidence_threshold:
                 detected_object_list.append(object_name)
                 detected_object_score.append(score)
                 detected_bb_list.append(output_bb_ary[idx])
@@ -228,7 +195,9 @@ class object_detection():
             rospy.loginfo("--------> Object detected <--------")
             requested_object_string = (self.requested_object).lower()
             object_idx = detected_object_list.index(requested_object_string)
-
+            print("---------------------------")
+            print("Bounding Box: ", detected_bb_list)
+            print("---------------------------")
             # Referee output message publishing
             object_detection_msg = ObjectDetectionResult()
             object_detection_msg.message_type = ObjectDetectionResult.RESULT
@@ -249,14 +218,15 @@ class object_detection():
             object_detection_msg.image = ros_image
 
             # publish message
+            rospy.loginfo("Publishing result to referee...")
             self.output_bb_pub.publish(object_detection_msg)
 
             # draw bounding box on target detected object
-            opencv_img = cv2.rectangle(opencv_img, (int(detected_bb_list[object_idx][0]),
-                                                    int(detected_bb_list[object_idx][1])),
-                                       (int(detected_bb_list[object_idx][2]),
-                                        int(detected_bb_list[object_idx][3])),
-                                       (255, 255, 255), 2)
+            # opencv_img = cv2.rectangle(opencv_img, (int(detected_bb_list[object_idx][0]),
+            #                                         int(detected_bb_list[object_idx][1])),
+            #                            (int(detected_bb_list[object_idx][2]),
+            #                             int(detected_bb_list[object_idx][3])),
+            #                            (255, 255, 255), 2)
 
             # display image
             # cv2.imshow('Output Img', opencv_img)
@@ -327,6 +297,7 @@ class object_detection():
         if msg.command == 2:
             self.stop_sub_flag = True
             self.image_sub.unregister()
+            rospy.loginfo("Received stopped command from referee")
             rospy.loginfo("Subscriber stopped")
 
 
