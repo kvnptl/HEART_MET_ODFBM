@@ -31,9 +31,9 @@ def main():
     #                                                       args.image_topic, args.output_dir))
 
     # input output paths
-    input_bagfiles_dir = "../captured_images"
+    input_bagfiles_dir = "/home/kvnptl/work/heart_met_competition/heart_met_ws/src/HEART_MET_ODFBM/object_detection/captured_images/data_collection_24_may_22"
     input_rostopic = "/hsrb/head_rgbd_sensor/rgb/image_raw"
-    output_dir = "../captured_images/extracted_images/"
+    output_dir = input_bagfiles_dir
 
     # get files from given dir
     onlyfiles = [f for f in listdir(input_bagfiles_dir) if isfile(join(input_bagfiles_dir, f))]
