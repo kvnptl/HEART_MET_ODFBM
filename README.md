@@ -40,3 +40,8 @@ View the rosbag image by running:
 - Distance between table edge and robot central axis is ~90cm.
 - Camera position - ~142cm
 - Table height ~112cm
+
+
+#### Train Yolo model command:
+
+`python train.py --img 640 --cfg yolov5s.yaml --hyp hyp.scratch-low.yaml --batch 32 --epochs 150 --data heartmet.yaml --weights yolov5s.pt --workers 24 --name yolo_HeartMet_day2`
