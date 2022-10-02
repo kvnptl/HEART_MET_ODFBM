@@ -4,6 +4,7 @@
 from tokenize import String
 from urllib import request
 
+import numpy as np
 from sympy import capture, re
 import rospy  # Python library for ROS
 from sensor_msgs.msg import Image  # Image is the message type
@@ -17,11 +18,9 @@ import rospkg
 import os
 from datetime import datetime
 
-#import pytorch
-import torch
-import torchvision
-# importing Yolov5 model
-from detect_modified import run
+import yolov5
+
+import pdb
 
 
 class object_detection():
@@ -33,23 +32,9 @@ class object_detection():
         self.stop_sub_flag = False
         self.cnt = 0
 
-        # COCO dataset labels
-        self.COCO_INSTANCE_CATEGORY_NAMES = [
-            '__background__', 'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
-            'train', 'truck', 'boat', 'traffic light', 'fire hydrant', 'N/A', 'stop sign',
-            'parking meter', 'bench', 'bird', 'cat', 'dog', 'horse', 'sheep', 'cow',
-            'elephant', 'bear', 'zebra', 'giraffe', 'N/A', 'backpack', 'umbrella', 'N/A', 'N/A',
-            'handbag', 'tie', 'suitcase', 'frisbee', 'skis', 'snowboard', 'sports ball',
-            'kite', 'baseball bat', 'baseball glove', 'skateboard', 'surfboard', 'tennis racket',
-            'bottle', 'N/A', 'wine glass', 'cup', 'fork', 'knife', 'spoon', 'bowl',
-            'banana', 'apple', 'sandwich', 'orange', 'broccoli', 'carrot', 'hot dog', 'pizza',
-            'donut', 'cake', 'chair', 'couch', 'potted plant', 'bed', 'N/A', 'dining table',
-            'N/A', 'N/A', 'toilet', 'N/A', 'tv', 'laptop', 'mouse', 'remote', 'keyboard', 'cell phone',
-            'microwave', 'oven', 'toaster', 'sink', 'refrigerator', 'N/A', 'book',
-            'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush'
-        ]
-
-        # yolo model confidence threshold
+        # yolo model config
+        self.model_name = 'best_overfit.pt'
+        self.classes_path = 'heartmet.names'
         self.confidence_threshold = 0.5
 
         # publisher
@@ -91,46 +76,6 @@ class object_detection():
                     # pop the first element
                     self.image_queue.pop(0)
 
-                    # save all images on local drive
-
-                    # create folder for incoming images
-                    # get an instance of RosPack with the default search paths
-                    # rospack = rospkg.RosPack()
-
-                    # get the file path for object_detection package
-                    # pkg_path = rospack.get_path('object_detection')
-                    # captured_images_path = pkg_path + "/captured_images/"
-
-                    # if not os.path.exists(captured_images_path):
-                    # 'makedirs' creates a directory with it's path, if applicable.
-                    # os.makedirs(captured_images_path)
-
-                    # get date and time
-                    # datetime object containing current date and time
-                    # now = datetime.now()
-
-                    # dd/mm/YY H:M:S
-                    # dt_string = now.strftime("%d_%m_%Y_%H_%M_%S")
-
-                    # for i in self.image_queue:
-                    # save image path
-                    # img_path = captured_images_path + 'captured_images_' + \
-                    # dt_string + '_' + str(self.cnt) + '.jpg'
-
-                    # save image to local drive
-                    # cv2.imwrite(img_path, i)
-                    # self.cnt += 1
-
-                    # rospy.loginfo("Input images saved on local drive")
-
-                    # call object inference method
-                    # print("Image queue size: ", len(self.image_queue))
-
-                    # waiting for referee box to be ready
-                    # rospy.loginfo("Waiting for referee box to be ready...")
-                    # while self.requested_object is None:
-                    #     pass
-
                     # deregister subscriber
                     self.image_sub.unregister()
 
@@ -159,11 +104,59 @@ class object_detection():
         # get the file path for object_detection package
         pkg_path = rospack.get_path('object_detection')
         model_path = pkg_path + "/models/"
-        data_config_path = pkg_path + "/scripts/"
+        data_config_file = pkg_path + "/scripts/" + self.classes_path
         # Give the incoming image for inferencing
-        predictions = run(weights=model_path + "best.pt",
-                          data=data_config_path + "heartmet.yaml",
-                          source=opencv_img)
+        # predictions = run(weights=model_path + self.model_name,
+        #                   data=data_config_path + "heartmet.yaml",
+        #                   source=opencv_img)
+
+        # self._model = torch.hub.load(
+        #     'ultralytics/yolov5', 'custom', path=model_path + self.model_name, force_reload=True)
+
+        # some sanity checks
+        if not os.path.isfile(model_path + self.model_name):
+            raise FileExistsError(
+                f"Weights not found ({model_path + self.model_name}).")
+
+        if data_config_file:
+            if not os.path.isfile(data_config_file):
+                raise FileExistsError(
+                    f"Classes file not found ({data_config_file}).")
+            class_labels = self.parse_classes_file(data_config_file)
+        else:
+            rospy.loginfo(
+                "No class file provided. Class labels will not be visualized.")
+            class_labels = None
+
+        ob_model = yolov5.load(model_path + self.model_name)
+        np_image = np.array(opencv_img, dtype=np.uint8)
+        prediction = ob_model(np_image)
+
+        results = prediction.xyxy[0]
+
+        box = np.array(results[:, 0:4], dtype=int)
+        conf = np.array(results[:, 4])
+        lbl = np.array(results[:, 5])
+
+        #####################
+        # print labels
+        #####################
+        print("conf: ", conf)
+        print("lbl: ", lbl)
+
+        bbox = []
+        confi = []
+        label = []
+        # Write results
+        for xyxy, cconf, ccls in zip(box, conf, lbl):
+            bbox.append([x for x in xyxy])
+            confi.append(cconf)
+            lbs = class_labels[int(ccls)]
+            lbs = lbs.split(':')[1]
+            lbs = lbs.lower()
+            label.append(lbs)
+
+        predictions = {'boxes': box, 'labels': label, 'scores': confi}
 
         # extracting bounding boxes, labels, and scores from prediction output
         output_bb_ary = predictions['boxes']
@@ -282,7 +275,12 @@ class object_detection():
             print("\nStart command received")
 
             # start subscriber for image topic
-            self.image_sub = rospy.Subscriber("/hsrb/head_rgbd_sensor/rgb/image_raw",
+            # HSR raw camera topic
+            # self.image_sub = rospy.Subscriber("/hsrb/head_rgbd_sensor/rgb/image_raw",
+            #                                   Image,
+            #                                   self._input_image_cb)
+            # Intel Realsense camera topic
+            self.image_sub = rospy.Subscriber("/camera/color/image_raw",
                                               Image,
                                               self._input_image_cb)
 
@@ -299,6 +297,14 @@ class object_detection():
             self.image_sub.unregister()
             rospy.loginfo("Received stopped command from referee")
             rospy.loginfo("Subscriber stopped")
+
+    def parse_classes_file(self, path):
+        classes = []
+        with open(path, "r") as f:
+            for line in f:
+                line = line.replace("\n", "")
+                classes.append(line)
+        return classes
 
 
 if __name__ == "__main__":
