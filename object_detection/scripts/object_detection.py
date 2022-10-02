@@ -21,9 +21,6 @@ import controller_manager_msgs.srv
 import rospy
 import trajectory_msgs.msg
 
-#import pytorch
-import torch
-import torchvision
 # importing Yolov5 model
 from detect_modified import run
 
@@ -87,46 +84,6 @@ class object_detection():
 
                     # pop the first element
                     self.image_queue.pop(0)
-
-                    # save all images on local drive
-
-                    # create folder for incoming images
-                    # get an instance of RosPack with the default search paths
-                    # rospack = rospkg.RosPack()
-
-                    # get the file path for object_detection package
-                    # pkg_path = rospack.get_path('object_detection')
-                    # captured_images_path = pkg_path + "/captured_images/"
-
-                    # if not os.path.exists(captured_images_path):
-                    # 'makedirs' creates a directory with it's path, if applicable.
-                    # os.makedirs(captured_images_path)
-
-                    # get date and time
-                    # datetime object containing current date and time
-                    # now = datetime.now()
-
-                    # dd/mm/YY H:M:S
-                    # dt_string = now.strftime("%d_%m_%Y_%H_%M_%S")
-
-                    # for i in self.image_queue:
-                    # save image path
-                    # img_path = captured_images_path + 'captured_images_' + \
-                    # dt_string + '_' + str(self.cnt) + '.jpg'
-
-                    # save image to local drive
-                    # cv2.imwrite(img_path, i)
-                    # self.cnt += 1
-
-                    # rospy.loginfo("Input images saved on local drive")
-
-                    # call object inference method
-                    # print("Image queue size: ", len(self.image_queue))
-
-                    # waiting for referee box to be ready
-                    # rospy.loginfo("Waiting for referee box to be ready...")
-                    # while self.requested_object is None:
-                    #     pass
 
                     # deregister subscriber
                     self.image_sub.unregister()
