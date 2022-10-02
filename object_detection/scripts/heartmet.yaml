@@ -7,9 +7,25 @@ test: /home/barath/heartmet_training/dataset/images/test
 nc: 22
 
 # class names
-names: ['cup', 'plate','bowl','towel','shoes','sponge','bottle','toothbrush','toothpaste','tray','sweater','cellphone',
-'banana', 'medicine bottle', 'reading glasses', 'flashlight', 'pill box', 'book', 'knife', 'cellphone charger', 'shopping bag', 'keyboard']
-
+# Classes
+names:
+  0: cup
+  1: plate
+  2: bowl
+  3: towel
+  4: shoes
+  5: sponge
+  6: bottle
+  7: toothbrush
+  8: toothpaste
+  9: tray
+  10: sweater
+  11: medicine bottle
+  12: reading glasses
+  13: flashlight
+  14: pill box
+  15: book
+  16: basket
 
 
 
