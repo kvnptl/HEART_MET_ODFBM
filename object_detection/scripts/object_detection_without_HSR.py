@@ -280,7 +280,16 @@ class object_detection():
             #                                   Image,
             #                                   self._input_image_cb)
             # Intel Realsense camera topic
-            self.image_sub = rospy.Subscriber("/camera/color/image_raw",
+            # self.image_sub = rospy.Subscriber("/camera/color/image_raw",
+            #                                   Image,
+            #                                   self._input_image_cb)
+            # ASUS openni camera topic
+            # self.image_sub = rospy.Subscriber("/camera/rgb/image_raw",
+            #                                   Image,
+            #                                   self._input_image_cb)
+
+            # Tiago robot camera topic
+            self.image_sub = rospy.Subscriber("/xtion/rgb/image_raw",
                                               Image,
                                               self._input_image_cb)
 
