@@ -5,6 +5,7 @@ from tokenize import String
 from urllib import request
 
 import numpy as np
+from regex import R
 from sympy import capture, re
 import rospy  # Python library for ROS
 from sensor_msgs.msg import Image  # Image is the message type
@@ -53,8 +54,56 @@ class object_detection():
         self.referee_command_sub = rospy.Subscriber(
             "/metrics_refbox_client/command", Command, self._referee_command_cb)
 
+
+        #####################
+        # Load YOLOv5 model for inferencing
+        #####################
+        # get an instance of RosPack with the default search paths
+        rospack = rospkg.RosPack()
+
+        # get the file path for object_detection package
+        pkg_path = rospack.get_path('object_detection')
+        model_path = pkg_path + "/models/"
+        data_config_file = pkg_path + "/scripts/" + self.classes_path
+        # Give the incoming image for inferencing
+        # predictions = run(weights=model_path + self.model_name,
+        #                   data=data_config_path + "heartmet.yaml",
+        #                   source=opencv_img)
+
+        # self._model = torch.hub.load(
+        #     'ultralytics/yolov5', 'custom', path=model_path + self.model_name, force_reload=True)
+
+        # some sanity checks
+        if not os.path.isfile(model_path + self.model_name):
+            raise FileExistsError(
+                f"Weights not found ({model_path + self.model_name}).")
+
+        if data_config_file:
+            if not os.path.isfile(data_config_file):
+                raise FileExistsError(
+                    f"Classes file not found ({data_config_file}).")
+            self.class_labels = self.parse_classes_file(data_config_file)
+        else:
+            rospy.loginfo(
+                "No class file provided. Class labels will not be visualized.")
+            self.class_labels = None
+
+        self.ob_model = yolov5.load(model_path + self.model_name)
+        self.og_yolo_model = yolov5.load(model_path + self.model_name_og)
+        #og_yolo_model.conf = 0.4
+        
+        ##### Day2 model ##############
+        self.auxillary_model = yolov5.load(model_path + self.model_name_day2)
+        #auxillary_model.conf = 0.4  # NMS confidence threshold
+        
+        #print("Writing..")
+        #cv2.imwrite("captured_images.jpg", opencv_img)
+        #og_yolo_model.iou = 0.45  # NMS IoU threshold
+        self.og_yolo_model.classes = [39, 41, 45, 73, 79]
+        self.ob_model.classes = [5,7,8, 11, 14]
+
         # waiting for referee box to be ready
-        rospy.loginfo("Waiting for referee box ...")
+        rospy.loginfo("Waiting for referee box ...") 
 
     def _input_image_cb(self, msg):
         """
@@ -103,128 +152,17 @@ class object_detection():
 
         opencv_img = self.image_queue[0]
 
-        #####################
-        # Load YOLOv5 model for inferencing
-        #####################
-        # get an instance of RosPack with the default search paths
-        rospack = rospkg.RosPack()
-
-        # get the file path for object_detection package
-        pkg_path = rospack.get_path('object_detection')
-        model_path = pkg_path + "/models/"
-        data_config_file = pkg_path + "/scripts/" + self.classes_path
-        # Give the incoming image for inferencing
-        # predictions = run(weights=model_path + self.model_name,
-        #                   data=data_config_path + "heartmet.yaml",
-        #                   source=opencv_img)
-
-        # self._model = torch.hub.load(
-        #     'ultralytics/yolov5', 'custom', path=model_path + self.model_name, force_reload=True)
-
-        # some sanity checks
-        if not os.path.isfile(model_path + self.model_name):
-            raise FileExistsError(
-                f"Weights not found ({model_path + self.model_name}).")
-
-        if data_config_file:
-            if not os.path.isfile(data_config_file):
-                raise FileExistsError(
-                    f"Classes file not found ({data_config_file}).")
-            class_labels = self.parse_classes_file(data_config_file)
-        else:
-            rospy.loginfo(
-                "No class file provided. Class labels will not be visualized.")
-            class_labels = None
-
-        ob_model = yolov5.load(model_path + self.model_name)
-        og_yolo_model = yolov5.load(model_path + self.model_name_og)
-        #og_yolo_model.conf = 0.4
-        
-        ##### Day2 model ##############
-        auxillary_model = yolov5.load(model_path + self.model_name_day2)
-        #auxillary_model.conf = 0.4  # NMS confidence threshold
-        
-        #print("Writing..")
-        #cv2.imwrite("captured_images.jpg", opencv_img)
-        #og_yolo_model.iou = 0.45  # NMS IoU threshold
-        og_yolo_model.classes = [39, 41, 45, 73, 79]
-        ob_model.classes = [5,7,8, 11, 14] # 
         np_image = np.array(opencv_img, dtype=np.uint8)
-        prediction = ob_model(np_image)
-        og_prediction = og_yolo_model(np_image)
-        aux_prediction = auxillary_model(np_image)
-
-        yolo_results = og_prediction.xyxy[0].numpy()
-        ob_results = prediction.xyxy[0].numpy()
-        aux_results = aux_prediction.xyxy[0].numpy()
-
-        results = np.vstack((yolo_results, ob_results,aux_results))
-        #results = np.vstack((ob_results))
-
-        results = results[results[:,4].argsort()[::-1]]
-
-        results[results == 39] = 6
-        results[results == 41] = 0
-        results[results == 45] = 2
-        results[results == 73] = 15
-        results[results == 79] = 7
         
-        print(yolo_results)
-        print('yolo ++++++++++++++++')
-        print(ob_results)
-        print('Overfit ++++++++++++++++')
-        print(aux_results)
-        print('Toothbrush ++++++++++++++++')
+        # if object not found then reinferencing max 3 times
+        for i in range(3):
+            detected_object_list, detected_object_score, detected_bb_list = self.inference(np_image)
 
-        box = np.array(results[:, 0:4], dtype=int)
-        conf = np.array(results[:, 4])
-        lbl = np.array(results[:, 5])
-
-        #####################
-        # print labels
-        #####################
-        print("conf: ", conf)
-        print("lbl: ", lbl)
-
-        bbox = []
-        confi = []
-        label = []
-        # Write results
-        for xyxy, cconf, ccls in zip(box, conf, lbl):
-            bbox.append([x for x in xyxy])
-            confi.append(cconf)
-            lbs = class_labels[int(ccls)]
-            lbs = lbs.split(':')[1]
-            lbs = lbs.lower()
-            label.append(lbs)
-
-        predictions = {'boxes': box, 'labels': label, 'scores': confi}
-
-        # extracting bounding boxes, labels, and scores from prediction output
-        output_bb_ary = predictions['boxes']
-        output_labels_ary = predictions['labels']
-        output_scores_ary = predictions['scores']
-
-        detected_object_list = []
-        detected_object_score = []
-        detected_bb_list = []
-
-        # Extract required objects from prediction output
-        print("---------------------------")
-        print("Name of the objects, Score\n")
-        for idx, value in enumerate(output_labels_ary):
-            object_name = value
-            score = output_scores_ary[idx]
-
-            if score > self.confidence_threshold:
-                detected_object_list.append(object_name)
-                detected_object_score.append(score)
-                detected_bb_list.append(output_bb_ary[idx])
-
-                print("{}, {}".format(object_name, score))
-
-        print("---------------------------")
-
+            if (self.requested_object).lower() in detected_object_list:
+                break
+            else:
+                rospy.loginfo("Object not found in the current frame. Trying again {}/3.." .format(i+1))
+        
         # Only publish the target object requested by the referee
         if (self.requested_object).lower() in detected_object_list:
             rospy.loginfo("--------> Object detected <--------")
@@ -299,8 +237,81 @@ class object_detection():
         self.stop_sub_flag = False
         self.image_queue = []
 
-        return predictions
+        return {"object_list": detected_object_list, "object_score": detected_object_score, "bb_list": detected_bb_list}
 
+    
+    def inference(self, infer_img):
+
+        prediction = self.ob_model(infer_img)
+        og_prediction = self.og_yolo_model(infer_img)
+        aux_prediction = self.auxillary_model(infer_img)
+
+        yolo_results = og_prediction.xyxy[0].numpy()
+        ob_results = prediction.xyxy[0].numpy()
+        aux_results = aux_prediction.xyxy[0].numpy()
+
+        results = np.vstack((yolo_results, ob_results,aux_results))
+
+        #results = np.vstack((ob_results))
+        results = results[results[:,4].argsort()[::-1]]
+
+        results[results == 39] = 6
+        results[results == 41] = 0
+        results[results == 45] = 2
+        results[results == 73] = 15
+        results[results == 79] = 7
+        
+        box = np.array(results[:, 0:4], dtype=int)
+        conf = np.array(results[:, 4])
+        lbl = np.array(results[:, 5])
+
+        #####################
+        # print labels
+        #####################
+        print("conf: ", conf)
+        print("lbl: ", lbl)
+
+        bbox = []
+        confi = []
+        label = []
+        # Write results
+        for xyxy, cconf, ccls in zip(box, conf, lbl):
+            bbox.append([x for x in xyxy])
+            confi.append(cconf)
+            lbs = self.class_labels[int(ccls)]
+            lbs = lbs.split(':')[1]
+            lbs = lbs.lower()
+            label.append(lbs)
+
+        predictions = {'boxes': box, 'labels': label, 'scores': confi}
+
+        # extracting bounding boxes, labels, and scores from prediction output
+        output_bb_ary = predictions['boxes']
+        output_labels_ary = predictions['labels']
+        output_scores_ary = predictions['scores']
+
+        detected_object_list = []
+        detected_object_score = []
+        detected_bb_list = []
+
+        # Extract required objects from prediction output
+        print("---------------------------")
+        print("Name of the objects, Score\n")
+        for idx, value in enumerate(output_labels_ary):
+            object_name = value
+            score = output_scores_ary[idx]
+
+            if score > self.confidence_threshold:
+                detected_object_list.append(object_name)
+                detected_object_score.append(score)
+                detected_bb_list.append(output_bb_ary[idx])
+
+                print("{}, {}".format(object_name, score))
+
+        print("---------------------------")
+
+        return detected_object_list, detected_object_score, detected_bb_list
+    
     def _referee_command_cb(self, msg):
 
         # Referee comaand message (example)
